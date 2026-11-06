@@ -264,9 +264,12 @@ def create_app(config=None):
                     raise HTTPException(422, 'Устройство не поддерживает управление реле')
                 if body.kind in ('low_power', 'max_duration') and not device.mapping.get('power'):
                     raise HTTPException(422, 'Устройство не предоставляет мощность')
+                start_timer = body.kind == 'timer' and body.enabled
+                if start_timer:
+                    await monitor().relay(body.device_id, True, f'Таймер «{body.name}»: запуск')
                 row = Rule(device_id=body.device_id, mode=monitor().preferences.mode, name=body.name, kind=body.kind, enabled=body.enabled,
                            config=body.model_dump(exclude={'device_id', 'name', 'kind', 'enabled'}),
-                           due_at=time.time() + body.minutes * 60 if body.kind == 'timer' else None)
+                           due_at=time.time() + body.minutes * 60 if start_timer else None)
                 db.add(row)
                 db.commit()
                 return {'id': row.id}
@@ -278,11 +281,14 @@ def create_app(config=None):
                 row = db.get(Rule, rule_id)
                 if not row or row.mode != monitor().preferences.mode:
                     raise HTTPException(404, 'Правило не найдено')
+                if row.enabled == body.enabled:
+                    return {'ok': True}
+                if row.kind == 'timer' and body.enabled:
+                    await monitor().relay(row.device_id, True, f'Таймер «{row.name}»: запуск')
+                    row.due_at = time.time() + row.config['minutes'] * 60
                 row.enabled = body.enabled
                 row.last_run = None
                 monitor().rule_low.pop(rule_id, None)
-                if row.kind == 'timer' and body.enabled:
-                    row.due_at = time.time() + row.config['minutes'] * 60
                 db.commit()
         return {'ok': True}
 
