@@ -1,0 +1,3 @@
+{$MONITOR_DOMAIN} {
+    reverse_proxy monitor:8000
+}

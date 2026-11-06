@@ -1,0 +1,34 @@
+services:
+  monitor:
+    build: .
+    env_file: .env
+    environment:
+      COOKIE_SECURE: "true"
+      ALLOWED_ORIGINS: "https://${MONITOR_DOMAIN:?Set MONITOR_DOMAIN in .env}"
+    volumes:
+      - monitor-data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+  caddy:
+    image: caddy:2-alpine
+    environment:
+      MONITOR_DOMAIN: "${MONITOR_DOMAIN:?Set MONITOR_DOMAIN in .env}"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      monitor:
+        condition: service_healthy
+    restart: unless-stopped
+volumes:
+  monitor-data:
+  caddy-data:
+  caddy-config:
